@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Web;
+
 #if NETFRAMEWORK
 using Griddly.Mvc.Linq.Dynamic;
 using System.Web.Mvc;
@@ -408,9 +409,11 @@ namespace Griddly.Mvc
         public static object GetGriddlyDefault(this RazorPageBase page, string field)
 #endif
         {
+            string gridContextKey = GetGridContextKey(page.ViewContext?.HttpContext);
+
             object value = null;
 
-            if ((page.ViewContext.ViewData[_contextKey] as GriddlyContext)?.Defaults.TryGetValue(field, out value) != true)
+            if ((page.ViewContext.ViewData[gridContextKey] as GriddlyContext)?.Defaults.TryGetValue(field, out value) != true)
                 value = null;
 
             return value;
@@ -422,9 +425,10 @@ namespace Griddly.Mvc
         public static object GetGriddlyParameter(this RazorPageBase page, string field)
 #endif
         {
+            string gridContextKey = GetGridContextKey(page.ViewContext?.HttpContext);
             object value = null;
 
-            if ((page.ViewContext.ViewData[_contextKey] as GriddlyContext)?.Parameters.TryGetValue(field, out value) != true)
+            if ((page.ViewContext.ViewData[gridContextKey] as GriddlyContext)?.Parameters.TryGetValue(field, out value) != true)
                 value = null;
 
             return value;
@@ -436,7 +440,8 @@ namespace Griddly.Mvc
         public static int GetGriddlyParameterCount(this RazorPageBase page)
 #endif
         {
-            return (page.ViewContext.ViewData[_contextKey] as GriddlyContext)?.Parameters.Count ?? 0;
+            string gridContextKey = GetGridContextKey(page.ViewContext?.HttpContext);
+            return (page.ViewContext.ViewData[gridContextKey] as GriddlyContext)?.Parameters.Count ?? 0;
         }
 
 #if NETFRAMEWORK
@@ -445,8 +450,9 @@ namespace Griddly.Mvc
         public static Dictionary<string, object> GetGriddlyDefaults(this RazorPageBase page)
 #endif
         {
+            string gridContextKey = GetGridContextKey(page.ViewContext?.HttpContext);
             Dictionary<string, object> defaults = new Dictionary<string, object>();
-            var context = page.ViewContext.ViewData[_contextKey] as GriddlyContext;
+            var context = page.ViewContext.ViewData[gridContextKey] as GriddlyContext;
 
             if (context != null)
             {
@@ -478,9 +484,10 @@ namespace Griddly.Mvc
 #if NETCOREAPP
         public static GriddlyContext GetOrCreateGriddlyContext(this ActionContext actionContext)
         {
+            string gridContextKey = GetGridContextKey(actionContext.HttpContext);
             var context = GetOrCreateGriddlyContext(actionContext.RouteData, actionContext.HttpContext);
             if (actionContext is ViewContext vc)
-                vc.ViewData[_contextKey] = context;
+                vc.ViewData[gridContextKey] = context;
             return context;
         }
 
@@ -493,11 +500,14 @@ namespace Griddly.Mvc
 #if NETFRAMEWORK
         public static GriddlyContext GetOrCreateGriddlyContext(this ControllerBase controller)
         {
-            var context = controller.ViewData[_contextKey] as GriddlyContext;
+            string gridContextKey = GetGridContextKey(controller.ControllerContext.HttpContext);
+            var context = controller.ViewData[gridContextKey] as GriddlyContext;
 #else
         private static GriddlyContext GetOrCreateGriddlyContext(RouteData routeData, HttpContext httpContext)
         {
-            var context = httpContext.Items[_contextKey] as GriddlyContext;
+            string gridContextKey = GetGridContextKey(httpContext);
+
+            var context = httpContext.Items[gridContextKey] as GriddlyContext;
 #endif
 
             if (context == null)
@@ -545,9 +555,9 @@ namespace Griddly.Mvc
 
                 // NOTE: for 2020 Chris... yes, this is unique for multiple griddlies on a page as it is in the grid action context of each one
 #if NETFRAMEWORK
-                controller.ViewData[_contextKey] = context;
+                controller.ViewData[gridContextKey] = context;
 #else
-                httpContext.Items[_contextKey] = context;
+                httpContext.Items[gridContextKey] = context;
 #endif
             }
 
@@ -582,6 +592,35 @@ namespace Griddly.Mvc
             }
 
             return null;
+        }
+
+#if NETFRAMEWORK
+        static string GetGridContextKey(HttpContextBase httpContext)
+#else
+        static string GetGridContextKey(HttpContext httpContext)
+#endif
+        {
+            if (httpContext == null)
+                return _contextKey;
+
+            NameValueCollection items;
+
+#if NETFRAMEWORK
+                if (httpContext.Request.Params != null)
+                    items = new NameValueCollection(httpContext.Request.Params);
+#else
+            if ((httpContext.Request.Method == "POST" && httpContext.Request.Form != null) || httpContext.Request.Query != null)
+                items = new NameValueCollection(httpContext.Request.GetParams());
+#endif
+            else
+                items = new NameValueCollection();
+
+            string gridIdentifier = items[nameof(gridIdentifier).ToLower()] != null ? Convert.ToString(items[nameof(gridIdentifier).ToLower()]) : string.Empty;
+
+            if (string.IsNullOrEmpty(gridIdentifier))
+                return _contextKey;
+
+            return $"{_contextKey}_{gridIdentifier}";
         }
 
 
@@ -622,7 +661,7 @@ namespace Griddly.Mvc
                     {
                         if (arrayVals.Length > 0)
                             arrayVals.Append("&");
-                        arrayVals.Append(string.Join("&", ((IEnumerable)value.Value).Cast<object>().Select(x=> value.Key + "=" + x?.ToString())));
+                        arrayVals.Append(string.Join("&", ((IEnumerable)value.Value).Cast<object>().Select(x => value.Key + "=" + x?.ToString())));
                     }
                 }
             }
@@ -656,7 +695,7 @@ namespace Griddly.Mvc
             }
 
             var route = helper.RouteUrl(values);
-            if(arrayVals.Length>0)
+            if (arrayVals.Length > 0)
             {
                 route += (route.Contains("?") ? "&" : "?") + arrayVals.ToString();
             }
