@@ -166,7 +166,6 @@ namespace Griddly.Mvc
         public bool ShowRowSelectCount { get; set; }
         public IDictionary<string, object> HtmlAttributes { get; set; }
         public IDictionary<string, object> TableHtmlAttributes { get; set; }
-
         public int? PageSize { get; set; }
         public int? MaxPageSize { get; set; }
 

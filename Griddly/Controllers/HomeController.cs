@@ -36,7 +36,7 @@ namespace Griddly.Controllers
             return View();
         }
 
-        public GriddlyResult Test1Grid(string lastName, string city = "fooorrr")
+        public GriddlyResult Test1Grid(string lastName, string city = "fooorrr", string GridIdentifier = "")
         {
             this.SetGriddlyDefault(ref lastName, "lastName", "ba");
 
@@ -50,7 +50,7 @@ namespace Griddly.Controllers
             return new QueryableResult<TestGridItem>(query);
         }
 
-        public GriddlyResult Test2Grid(string lastName, string city)
+        public GriddlyResult Test2Grid(string lastName, string city, string GridIdentifier = "")
         {
             this.SetGriddlyDefault(ref lastName, "city", "fo");
 

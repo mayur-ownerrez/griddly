@@ -8,6 +8,8 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Web;
+using System.Xml.Linq;
+
 
 #if NETFRAMEWORK
 using Griddly.Mvc.Linq.Dynamic;
@@ -484,7 +486,7 @@ namespace Griddly.Mvc
 #if NETCOREAPP
         public static GriddlyContext GetOrCreateGriddlyContext(this ActionContext actionContext)
         {
-            string gridContextKey = GetGridContextKey(actionContext.HttpContext);
+            string gridContextKey = GetGridContextKey(actionContext.RouteData, actionContext.HttpContext);
             var context = GetOrCreateGriddlyContext(actionContext.RouteData, actionContext.HttpContext);
             if (actionContext is ViewContext vc)
                 vc.ViewData[gridContextKey] = context;
@@ -500,12 +502,12 @@ namespace Griddly.Mvc
 #if NETFRAMEWORK
         public static GriddlyContext GetOrCreateGriddlyContext(this ControllerBase controller)
         {
-            string gridContextKey = GetGridContextKey(controller.ControllerContext.HttpContext);
+            string gridContextKey = GetGridContextKey(controller);
             var context = controller.ViewData[gridContextKey] as GriddlyContext;
 #else
         private static GriddlyContext GetOrCreateGriddlyContext(RouteData routeData, HttpContext httpContext)
         {
-            string gridContextKey = GetGridContextKey(httpContext);
+            string gridContextKey = GetGridContextKey(routeData, httpContext);
 
             var context = httpContext.Items[gridContextKey] as GriddlyContext;
 #endif
@@ -540,12 +542,14 @@ namespace Griddly.Mvc
 
                 sortFields = GriddlyResult.GetSortFields(items);
 
+                string cookieSuffix = gridContextKey.Replace(_contextKey, string.Empty).ToLower();
+
                 context = new GriddlyContext()
                 {
 #if NETFRAMEWORK
-                    Name = (controller.GetType().Name + "_" + controller.ControllerContext.RouteData.Values["action"] as string).ToLower(),
+                    Name = (controller.GetType().Name + "_" + controller.ControllerContext.RouteData.Values["action"] as string).ToLower() + cookieSuffix,
 #else
-                    Name = (routeData.Values["controller"] as string).ToLower() + "_" + (routeData.Values["action"] as string).ToLower(),
+                    Name = (routeData.Values["controller"] as string).ToLower() + "_" + (routeData.Values["action"] as string).ToLower() + cookieSuffix,
 #endif
                     PageNumber = pageNumber,
                     PageSize = pageSize,
@@ -595,13 +599,34 @@ namespace Griddly.Mvc
         }
 
 #if NETFRAMEWORK
+        static string GetGridContextKey(ControllerBase controller)
+#else
+        static string GetGridContextKey(RouteData routeData, HttpContext httpContext)
+#endif
+        {
+            NameValueCollection items;
+
+#if NETFRAMEWORK
+            string gridIdentifier = (controller.ControllerContext.RouteData.Values[nameof(gridIdentifier).ToLower()] as string);
+#else
+            string gridIdentifier = (routeData.Values[nameof(gridIdentifier).ToLower()] as string);
+#endif
+
+            if (string.IsNullOrEmpty(gridIdentifier))
+                return _contextKey.ToLower();
+
+            return $"{_contextKey}_{gridIdentifier}".ToLower();
+        }
+
+
+#if NETFRAMEWORK
         static string GetGridContextKey(HttpContextBase httpContext)
 #else
         static string GetGridContextKey(HttpContext httpContext)
 #endif
         {
             if (httpContext == null)
-                return _contextKey;
+                return _contextKey.ToLower();
 
             NameValueCollection items;
 
@@ -618,9 +643,9 @@ namespace Griddly.Mvc
             string gridIdentifier = items[nameof(gridIdentifier).ToLower()] != null ? Convert.ToString(items[nameof(gridIdentifier).ToLower()]) : string.Empty;
 
             if (string.IsNullOrEmpty(gridIdentifier))
-                return _contextKey;
+                return _contextKey.ToLower();
 
-            return $"{_contextKey}_{gridIdentifier}";
+            return $"{_contextKey}_{gridIdentifier}".ToLower();
         }
 
 
